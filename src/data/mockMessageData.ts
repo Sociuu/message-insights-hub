@@ -16,19 +16,35 @@ export interface Recipient {
   unsubscribedAt?: string;
 }
 
+export interface ContentShareStats {
+  /** Stats scoped to THIS message only */
+  clicks: number;
+  impressions: number;
+  reactions: number;
+  comments: number;
+  reshares: number;
+  emv: number; // Earned Media Value in USD
+}
+
 export interface ContentShare {
   id: string;
   title: string;
   type: "article" | "video" | "infographic" | "document";
+  /** Scoped to this message */
   viewCount: number;
   shareCount: number;
   shareRate: number;
+  /** Campaign-level stats from shares originating in this message */
+  campaignStats: ContentShareStats;
+  /** Global totals (from all messages/channels) — for context only */
+  globalShareCount: number;
 }
 
 export interface EngagementDataPoint {
   date: string;
   opens: number;
   shares: number;
+  clicks: number;
 }
 
 export interface DeliverabilityHealth {
@@ -38,6 +54,16 @@ export interface DeliverabilityHealth {
   spamComplaints: number;
   hardBounces: number;
   softBounces: number;
+}
+
+export interface CampaignTotals {
+  totalClicks: number;
+  totalImpressions: number;
+  totalReactions: number;
+  totalComments: number;
+  totalReshares: number;
+  totalEMV: number;
+  contentEngagementRate: number; // percentage
 }
 
 export interface MessageData {
@@ -53,6 +79,7 @@ export interface MessageData {
   contentShares: ContentShare[];
   engagementTimeline: EngagementDataPoint[];
   deliverability: DeliverabilityHealth;
+  campaignTotals: CampaignTotals;
 }
 
 // Helpers
@@ -93,7 +120,6 @@ function generateRecipients(): Recipient[] {
     const domain = domains[i % domains.length];
     const email = `${first.toLowerCase()}.${last.toLowerCase()}@${domain}`;
     
-    // 80% delivered, 8% bounced, 12% unsubscribed (but were delivered first)
     let deliveryStatus: DeliveryStatus;
     let bounceType: BounceType | undefined;
     let unsubscribedAt: string | undefined;
@@ -134,29 +160,91 @@ function generateEngagementTimeline(): EngagementDataPoint[] {
   return Array.from({ length: 26 }, (_, i) => {
     const date = new Date(start);
     date.setDate(date.getDate() + i);
-    // Peak on first few days, then tapering
     const dayFactor = Math.max(0, 1 - i * 0.06);
     const opens = Math.floor((Math.random() * 15 + 5) * dayFactor);
     const shares = Math.floor((Math.random() * 4 + 1) * dayFactor);
+    const clicks = Math.floor((Math.random() * 20 + 8) * dayFactor);
     return {
       date: date.toISOString().split("T")[0],
       opens,
       shares,
+      clicks,
     };
   });
 }
 
 function generateContentShares(): ContentShare[] {
   return [
-    { id: "cs-1", title: "Q1 2026 Company Performance Report", type: "document", viewCount: 142, shareCount: 28, shareRate: 19.7 },
-    { id: "cs-2", title: "Product Roadmap Update Video", type: "video", viewCount: 98, shareCount: 15, shareRate: 15.3 },
-    { id: "cs-3", title: "Employee Benefits Infographic", type: "infographic", viewCount: 201, shareCount: 45, shareRate: 22.4 },
-    { id: "cs-4", title: "New Office Locations Announcement", type: "article", viewCount: 76, shareCount: 8, shareRate: 10.5 },
+    {
+      id: "cs-1",
+      title: "Q1 2026 Company Performance Report",
+      type: "document",
+      viewCount: 142,
+      shareCount: 28,
+      shareRate: 19.7,
+      globalShareCount: 112,
+      campaignStats: { clicks: 487, impressions: 3240, reactions: 156, comments: 42, reshares: 28, emv: 4850 },
+    },
+    {
+      id: "cs-2",
+      title: "Product Roadmap Update Video",
+      type: "video",
+      viewCount: 98,
+      shareCount: 15,
+      shareRate: 15.3,
+      globalShareCount: 67,
+      campaignStats: { clicks: 312, impressions: 2180, reactions: 98, comments: 27, reshares: 15, emv: 3120 },
+    },
+    {
+      id: "cs-3",
+      title: "Employee Benefits Infographic",
+      type: "infographic",
+      viewCount: 201,
+      shareCount: 45,
+      shareRate: 22.4,
+      globalShareCount: 189,
+      campaignStats: { clicks: 892, impressions: 5670, reactions: 312, comments: 89, reshares: 45, emv: 8940 },
+    },
+    {
+      id: "cs-4",
+      title: "New Office Locations Announcement",
+      type: "article",
+      viewCount: 76,
+      shareCount: 8,
+      shareRate: 10.5,
+      globalShareCount: 43,
+      campaignStats: { clicks: 156, impressions: 890, reactions: 45, comments: 12, reshares: 8, emv: 1230 },
+    },
+    {
+      id: "cs-5",
+      title: "Leadership Team Welcome Message",
+      type: "video",
+      viewCount: 165,
+      shareCount: 22,
+      shareRate: 13.3,
+      globalShareCount: 95,
+      campaignStats: { clicks: 410, impressions: 2890, reactions: 187, comments: 53, reshares: 22, emv: 5210 },
+    },
   ];
+}
+
+function computeCampaignTotals(content: ContentShare[]): CampaignTotals {
+  const totalClicks = content.reduce((s, c) => s + c.campaignStats.clicks, 0);
+  const totalImpressions = content.reduce((s, c) => s + c.campaignStats.impressions, 0);
+  const totalReactions = content.reduce((s, c) => s + c.campaignStats.reactions, 0);
+  const totalComments = content.reduce((s, c) => s + c.campaignStats.comments, 0);
+  const totalReshares = content.reduce((s, c) => s + c.campaignStats.reshares, 0);
+  const totalEMV = content.reduce((s, c) => s + c.campaignStats.emv, 0);
+  const contentEngagementRate = totalImpressions > 0
+    ? ((totalClicks + totalReactions + totalComments) / totalImpressions) * 100
+    : 0;
+
+  return { totalClicks, totalImpressions, totalReactions, totalComments, totalReshares, totalEMV, contentEngagementRate };
 }
 
 // Main mock data
 const recipients = generateRecipients();
+const contentShares = generateContentShares();
 
 const delivered = recipients.filter(r => r.deliveryStatus !== "bounced").length;
 const bounced = recipients.filter(r => r.deliveryStatus === "bounced");
@@ -171,7 +259,7 @@ export const mockMessage: MessageData = {
   status: "sent",
   sentAt: "2026-03-15T10:30:00Z",
   recipients,
-  contentShares: generateContentShares(),
+  contentShares,
   engagementTimeline: generateEngagementTimeline(),
   deliverability: {
     totalSent: 50,
@@ -181,6 +269,7 @@ export const mockMessage: MessageData = {
     hardBounces: bounced.filter(b => b.bounceType === "hard").length,
     softBounces: bounced.filter(b => b.bounceType === "soft").length,
   },
+  campaignTotals: computeCampaignTotals(contentShares),
 };
 
 // Computed metrics
