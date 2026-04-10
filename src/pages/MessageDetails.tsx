@@ -2,14 +2,17 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Mail, MessageSquare, Hash, Users, CheckCircle, Eye, Share2, AlertTriangle, ShieldAlert, XCircle, ArrowDownCircle, Search } from "lucide-react";
 import { useState, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { mockMessage, getMessageMetrics, type MessageData, type EngagementDataPoint } from "@/data/mockMessageData";
+import { mockMessage, getMessageMetrics, type EngagementDataPoint } from "@/data/mockMessageData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { MetricCard } from "@/components/message-details/MetricCard";
+import { HealthCard } from "@/components/message-details/HealthCard";
+import { CampaignStatsCard } from "@/components/message-details/CampaignStatsCard";
+import { ContentPerformanceTab } from "@/components/message-details/ContentPerformanceTab";
 
 const channelConfig = {
   email: { label: "Email", icon: Mail, color: "bg-blue-100 text-blue-800" },
@@ -44,12 +47,11 @@ function downloadCSV(data: Record<string, unknown>[], filename: string) {
 export default function MessageDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const msg = mockMessage; // In real app, fetch by id
+  const msg = mockMessage;
   const metrics = getMessageMetrics(msg);
   const channel = channelConfig[msg.channel];
   const ChannelIcon = channel.icon;
 
-  // Engagement chart state
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "all">("all");
   const filteredTimeline = useMemo(() => {
     if (timeRange === "all") return msg.engagementTimeline;
@@ -57,7 +59,6 @@ export default function MessageDetails() {
     return msg.engagementTimeline.slice(0, days);
   }, [timeRange, msg.engagementTimeline]);
 
-  // Recipients search
   const [recipientSearch, setRecipientSearch] = useState("");
   const filteredRecipients = useMemo(() => {
     const q = recipientSearch.toLowerCase();
@@ -79,6 +80,8 @@ export default function MessageDetails() {
             <h1 className="text-lg font-semibold truncate">{msg.subject}</h1>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{formatDate(msg.sentAt)}</span>
+              <span>·</span>
+              <span>{msg.contentShares.length} content pieces</span>
             </div>
           </div>
           <Badge className={channel.color} variant="outline">
@@ -116,12 +119,15 @@ export default function MessageDetails() {
           <MetricCard icon={Share2} label="Share Rate" value={`${metrics.shareRate.toFixed(1)}%`} sub={`${metrics.totalShares} total shares`} progress={metrics.shareRate} />
         </div>
 
+        {/* Campaign Performance */}
+        <CampaignStatsCard totals={msg.campaignTotals} />
+
         {/* Engagement Chart */}
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
             <div>
               <CardTitle className="text-base">Engagement Over Time</CardTitle>
-              <CardDescription>Opens and shares activity</CardDescription>
+              <CardDescription>Opens, shares & clicks activity</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-md border">
@@ -152,6 +158,7 @@ export default function MessageDetails() {
                   />
                   <Legend />
                   <Area type="monotone" dataKey="opens" stroke="hsl(215, 70%, 55%)" fill="hsl(215, 70%, 55%, 0.15)" strokeWidth={2} name="Opens" />
+                  <Area type="monotone" dataKey="clicks" stroke="hsl(280, 60%, 55%)" fill="hsl(280, 60%, 55%, 0.15)" strokeWidth={2} name="Clicks" />
                   <Area type="monotone" dataKey="shares" stroke="hsl(150, 60%, 45%)" fill="hsl(150, 60%, 45%, 0.15)" strokeWidth={2} name="Shares" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -160,15 +167,20 @@ export default function MessageDetails() {
         </Card>
 
         {/* Tabs Section */}
-        <Tabs defaultValue="recipients">
+        <Tabs defaultValue="content">
           <div className="flex items-center justify-between">
             <TabsList>
+              <TabsTrigger value="content">Content Performance</TabsTrigger>
               <TabsTrigger value="recipients">Recipients</TabsTrigger>
-              <TabsTrigger value="content">Content Shares</TabsTrigger>
               <TabsTrigger value="deliverability">Deliverability</TabsTrigger>
               <TabsTrigger value="unsubscribers">Unsubscribers</TabsTrigger>
             </TabsList>
           </div>
+
+          {/* Content Performance Tab */}
+          <TabsContent value="content">
+            <ContentPerformanceTab contentShares={msg.contentShares} />
+          </TabsContent>
 
           {/* Recipients Tab */}
           <TabsContent value="recipients" className="space-y-4">
@@ -212,36 +224,6 @@ export default function MessageDetails() {
                       <TableCell className="text-sm">{formatDate(r.firstOpened)}</TableCell>
                       <TableCell className="text-sm">{formatDate(r.lastOpened)}</TableCell>
                       <TableCell className="text-center font-medium">{r.shareCount}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          </TabsContent>
-
-          {/* Content Shares Tab */}
-          <TabsContent value="content">
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Content</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-center">Views</TableHead>
-                    <TableHead className="text-center">Shares</TableHead>
-                    <TableHead className="text-center">Share Rate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {msg.contentShares.map(cs => (
-                    <TableRow key={cs.id}>
-                      <TableCell className="font-medium">{cs.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="capitalize">{cs.type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{cs.viewCount.toLocaleString()}</TableCell>
-                      <TableCell className="text-center">{cs.shareCount}</TableCell>
-                      <TableCell className="text-center">{cs.shareRate}%</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -296,45 +278,5 @@ export default function MessageDetails() {
         </Tabs>
       </main>
     </div>
-  );
-}
-
-// Sub-components
-
-function MetricCard({ icon: Icon, label, value, sub, progress }: { icon: React.ElementType; label: string; value: string | number; sub: string; progress: number }) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <Icon className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
-          </div>
-        </div>
-        <Progress value={Math.min(progress, 100)} className="mt-3 h-1.5" />
-        <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function HealthCard({ icon: Icon, label, count, total, color }: { icon: React.ElementType; label: string; count: number; total: number; color: string }) {
-  const pct = ((count / total) * 100).toFixed(1);
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-3">
-          <Icon className={`h-6 w-6 ${color}`} />
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold">{count}</p>
-          </div>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">{pct}% of {total} sent</p>
-      </CardContent>
-    </Card>
   );
 }
